@@ -1,12 +1,46 @@
 # Lab 10 — Counter Using Functions
 
 ## Objective
-Encapsulate the counter's combinational next-state behavior inside a Verilog `function` instead of writing it
-directly inside the always block.
+Practice encapsulating combinational logic inside a Verilog **`function`**, using Lab 9's
+counter as the starting point — same interface, same behavior, but the "what's the next
+value?" logic is refactored out of the `always` block and into a reusable function.
 
 ## Description
-Behaves exactly like the Lab 9 counter (rst / load / enab), but the next-count logic is computed inside a
-function called `get_next_count` instead of being written inline.
+```verilog
+function [WIDTH-1:0] get_next_count;
+    input load_val;
+    input enab_val;
+    input [WIDTH-1:0] in_val;
+    input [WIDTH-1:0] current_val;
+    begin
+        if (load_val)      get_next_count = in_val;
+        else if (enab_val) get_next_count = current_val + 1;
+        else               get_next_count = current_val;
+    end
+endfunction
+
+always @(posedge clk or posedge rst) begin
+    if (rst) cnt_out <= {WIDTH{1'b0}};
+    else     cnt_out <= get_next_count(load, enab, cnt_in, cnt_out);
+end
+```
+
+Compare directly with Lab 9: the priority logic (`load` > `enab` > hold) is *identical*, but
+instead of living inside its own combinational `always @(*)` block with an intermediate
+`next_cnt` signal, it's packaged as a **function** — `get_next_count` — that takes the
+relevant signals as explicit arguments and *returns* the next value. The sequential block
+then simply calls the function directly inside the nonblocking assignment.
+
+### Function vs. separate combinational block
+This is functionally 100% equivalent to Lab 9 (same testbench, same expected output), but
+it's a different way of *organizing* the same logic:
+- A **function** always executes instantaneously (zero simulation time), takes explicit
+  inputs, and returns a single value — much like a function in software. It's automatically
+  combinational; there's no need for a separate `always @(*)` block or an intermediate wire.
+- It naturally documents the *inputs the next-state logic actually depends on* (the function's
+  argument list), rather than relying on an implicit sensitivity list.
+- It's directly reusable: the same `get_next_count` logic could be called from more than one
+  place in a larger design without duplicating the `if`/`else if` chain.
 
 ## Ports
 | Signal    | Direction | Width              | Description             |
@@ -17,6 +51,18 @@ function called `get_next_count` instead of being written inline.
 | enab      | input     | 1                  | Count enable              |
 | cnt_in    | input     | WIDTH (default 5)  | Value to load             |
 | cnt_out   | output    | WIDTH (default 5)  | Current counter value     |
+
+## Verilog concepts demonstrated
+- `function` declaration with a return width (`function [WIDTH-1:0] name;`) and multiple
+  `input` arguments.
+- Calling a function directly from inside a procedural (nonblocking) assignment.
+- Refactoring identical behavior between two different Verilog coding styles (Lab 9 vs. Lab 10)
+  while keeping the module's external interface and testbench unchanged.
+
+## Testbench strategy
+Identical stimulus to Lab 9 — the whole point of this lab is that the *interface and
+behavior* haven't changed, only the internal implementation style has, so the same test
+sequence should produce the same pass/fail result.
 
 ## Files
 - `maincode.v` — counter design using a function (module `counter_with_function`).

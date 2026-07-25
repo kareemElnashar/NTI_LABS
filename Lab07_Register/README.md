@@ -1,11 +1,32 @@
 # Lab 7 — Generic Register
 
 ## Objective
-Use nonblocking assignments to build a generic register that can serve as an accumulator or instruction register.
+Practice **nonblocking assignment** (`<=`) inside sequential logic by building a simple,
+generic, parameterized-width register — the kind of block that later serves as the
+accumulator or instruction register inside the small CPU built up across Labs 5–6.
 
 ## Description
-`data_out` takes the value of `data_in` when `load = 1` on the rising edge of `clk`.
-Reset is synchronous and active-high, and clears `data_out`.
+```verilog
+always @(posedge clk) begin
+    if (rst == 1'b1)
+        data_out <= 0;
+    else if (load == 1'b1)
+        data_out <= data_in;
+end
+```
+
+On every rising edge of `clk`:
+- if `rst = 1`, `data_out` clears to `0`;
+- else if `load = 1`, `data_out` captures `data_in`;
+- else (both low), `data_out` **holds its previous value** — this is the key behavior of a
+  register versus a plain wire: with neither `rst` nor `load` asserted, no assignment at all
+  executes inside the `always` block for that edge, so `data_out` implicitly retains what it
+  already had (Verilog's simulation semantics for a `reg` that isn't written this cycle).
+
+Reset here is **synchronous** — it's only checked on the rising clock edge, unlike the
+asynchronous-reset counters in this lab set (compare with `2bit_up_down_counter`). This
+matches the intended use as a CPU register, where control signals like `rst`/`load` are
+themselves generated synchronously by the controller in Lab 6.
 
 ## Ports
 | Signal    | Direction | Width              | Description            |
@@ -15,6 +36,16 @@ Reset is synchronous and active-high, and clears `data_out`.
 | load      | input     | 1                  | Load enable               |
 | data_in   | input     | WIDTH (default 8)  | Input data                |
 | data_out  | output    | WIDTH (default 8)  | Stored data                |
+
+## Verilog concepts demonstrated
+- Nonblocking assignment (`<=`) for a clocked register.
+- Implicit "hold" behavior: a `reg` that isn't written on a given clock edge keeps its value.
+- Synchronous, priority-ordered `if`/`else if` (reset takes priority over load).
+
+## Testbench strategy
+`testbench.v` loads three different 8-bit patterns one after another (checking `data_out`
+tracks `data_in` each time `load = 1`), then asserts `rst` and checks `data_out` clears to
+`0` regardless of what was previously stored.
 
 ## Files
 - `maincode.v` — register design (module `register`).

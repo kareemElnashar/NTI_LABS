@@ -1,14 +1,48 @@
 # FSM — 3-State Moore/Mealy Finite State Machine
 
 ## Objective
-Design a 3-state finite state machine (`fsm_2`) with two inputs, an asynchronous active-low reset, one Mealy-type
-output and one Moore-type output.
+Design a 3-state finite state machine (`fsm_2`) with two inputs that produces **both** a
+Mealy-type output and a Moore-type output side by side, in the same design — a direct,
+hands-on illustration of the difference between the two output styles rather than treating
+them as two separate machines (contrast with the `rising edge detector` lab, which instead
+compares Moore vs. Mealy by building two *entirely separate* modules for the same task).
 
-## Description
-The FSM has 3 states: `S0 (00)`, `S1 (01)`, `S2 (10)`.
+## How it works
+```verilog
+always @(posedge clk or negedge reset)
+    if (!reset) present_state <= S0;
+    else        present_state <= next_state;
 
-- `y1` is a Moore output: it is 1 in every state except `S2`.
-- `y0` is a Mealy output: it is only asserted (`a & b`) while the FSM is in state `S0`.
+always @(*) begin
+    next_state = present_state;
+    y0 = 0;
+    y1 = (present_state != S2);
+
+    case (present_state)
+        S0: begin
+            y0 = a & b;
+            next_state = !a ? S0 : (b ? S2 : S1);
+        end
+        S1: next_state = a ? S0 : S1;
+        S2: next_state = S0;
+        default: next_state = S0;
+    endcase
+end
+```
+
+- **`y1` is the Moore output**: it's assigned *before* the `case` statement, purely as a
+  function of `present_state` (`1` in every state except `S2`) — no input (`a`/`b`) appears
+  in its expression at all. A Moore output only ever changes when the state itself changes,
+  i.e. on a clock edge.
+- **`y0` is the Mealy output**: it's only assigned inside the `S0` branch of the `case`, as
+  `a & b` — a function of *both* the current state **and** the current inputs. Because it
+  depends directly on `a`/`b`, it can change **within** a state, immediately as `a` or `b`
+  change, without waiting for the next clock edge — the defining trait of a Mealy output.
+- Reset here is **asynchronous and active-low** (`negedge reset` in the sensitivity list,
+  and `if (!reset)`): the state machine snaps back to `S0` the instant `reset` drops to `0`,
+  regardless of the clock. This is the opposite polarity from most other reset signals in
+  this lab set (which are active-high), so it's worth double-checking stimulus code
+  carefully when reusing this module elsewhere.
 
 ### Next-state logic
 | Current state | Condition        | Next state |
@@ -20,8 +54,6 @@ The FSM has 3 states: `S0 (00)`, `S1 (01)`, `S2 (10)`.
 | S1             | `!a`              | S1         |
 | S2             | (always)          | S0         |
 
-Reset is asynchronous and active-low: `present_state` is forced to `S0` whenever `reset = 0`, independent of the clock.
-
 ## Ports
 | Signal  | Direction | Width | Description                       |
 |---------|-----------|-------|-------------------------------------|
@@ -29,8 +61,23 @@ Reset is asynchronous and active-low: `present_state` is forced to `S0` whenever
 | b       | input     | 1     | Input B                             |
 | clk     | input     | 1     | Clock                               |
 | reset   | input     | 1     | Asynchronous reset, active-low      |
-| y0      | output    | 1     | Mealy output (asserted only in S0)  |
+| y0      | output    | 1     | Mealy output (asserted only in S0, when `a & b`) |
 | y1      | output    | 1     | Moore output (1 in every state except S2) |
+
+## Verilog concepts demonstrated
+- Combining a Mealy output and a Moore output in the same FSM, so the contrast between "state
+  + input dependent" vs. "state-only" outputs is visible directly in one `case` statement.
+- Asynchronous, **active-low** reset (`negedge reset`), as opposed to the active-high resets
+  used elsewhere in this lab set.
+- Default assignments (`next_state = present_state; y0 = 0; y1 = ...;`) placed *before* the
+  `case`, so every state/branch has a well-defined fallback value and no unintended latches
+  are inferred.
+
+## Testbench strategy
+`testbench.v` drives `a`/`b` through a sequence of eight combinations (after an initial reset
+pulse) and uses `$monitor` to print every signal on every change, so the resulting log can be
+read directly as a timing trace — useful for manually verifying, cycle by cycle, that `y0`
+reacts immediately within a state while `y1` only changes when `present_state` itself changes.
 
 ## Files
 - `maincode.v` — FSM design (module `fsm_2`).

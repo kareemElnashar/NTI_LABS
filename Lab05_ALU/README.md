@@ -1,22 +1,54 @@
 # Lab 5 — Arithmetic Logic Unit (ALU)
 
 ## Objective
-Use Verilog operators to build a parameterized-width ALU that performs 8 operations selected by opcode.
+Practice using Verilog operators (arithmetic, bitwise, relational) together with a `case`
+statement inside a combinational `always` block to build a parameterized-width ALU — the
+same building block that later becomes part of the CPU controller in Lab 6 and the pipeline
+in `TopModule`.
 
 ## Description
-`alu_out` is determined by the 3-bit `opcode`, and `a_is_zero` is a combinational flag that is 1 whenever `in_a == 0`.
+`alu` is purely combinational (`always @(*)`), so `alu_out` updates immediately whenever any
+input changes — there's no clock involved in this module at all.
 
-## Opcode Table
-| Opcode | Instruction | Operation      |
-|--------|-------------|----------------|
-| 000    | HLT         | PASS A         |
-| 001    | SKZ         | PASS A         |
-| 010    | ADD         | in_a + in_b    |
-| 011    | AND         | in_a & in_b    |
-| 100    | XOR         | in_a ^ in_b    |
-| 101    | LDA         | PASS B         |
-| 110    | STO         | PASS A         |
-| 111    | JMP         | PASS A         |
+```verilog
+always @(*) begin
+    case (opcode)
+        3'b000: alu_out = in_a;
+        3'b001: alu_out = in_a;
+        3'b010: alu_out = in_a + in_b;
+        3'b011: alu_out = in_a & in_b;
+        3'b100: alu_out = in_a ^ in_b;
+        3'b101: alu_out = in_b;
+        3'b110: alu_out = in_a;
+        3'b111: alu_out = in_a;
+        default: alu_out = 0;
+    endcase
+end
+```
+
+`a_is_zero` is a separate, independent continuous assignment:
+```verilog
+assign a_is_zero = (in_a == 0) ? 1'b1 : 1'b0;
+```
+It's a flag, not an ALU result — it's meant to answer "is operand A currently zero?" for use
+by other logic (e.g. Lab 6's `zero` input, used for conditional branches).
+
+### Opcode table
+Note that this opcode encoding isn't an arbitrary ALU truth table — it's reused directly as
+the CPU instruction opcode in Lab 6's controller, so several codes intentionally just pass
+an operand through unchanged (they're op**codes** for a simple CPU, not all "ALU operations"
+in the traditional sense):
+
+| Opcode | Instruction | Operation      | Notes |
+|--------|-------------|----------------|-------|
+| 000    | HLT         | PASS A         | Halt — ALU result unused |
+| 001    | SKZ         | PASS A         | Skip-if-zero — ALU result unused |
+| 010    | ADD         | in_a + in_b    | Real ALU operation |
+| 011    | AND         | in_a & in_b    | Real ALU operation |
+| 100    | XOR         | in_a ^ in_b    | Real ALU operation |
+| 101    | LDA         | PASS B         | Load accumulator from B |
+| 110    | STO         | PASS A         | Store — ALU result unused |
+| 111    | JMP         | PASS A         | Jump — ALU result unused |
 
 ## Ports
 | Signal     | Direction | Width              | Description         |
@@ -26,6 +58,18 @@ Use Verilog operators to build a parameterized-width ALU that performs 8 operati
 | opcode     | input     | 3                  | Operation select code |
 | alu_out    | output    | WIDTH (default 8)  | Result                |
 | a_is_zero  | output    | 1                  | 1 when in_a = 0       |
+
+## Verilog concepts demonstrated
+- Combinational `always @(*)` with a `case` statement (full case coverage, plus `default`
+  to avoid an unintended latch).
+- Arithmetic (`+`), bitwise (`&`, `^`) operators.
+- A separate, independent `assign` for a status flag alongside a procedural block for the
+  main datapath — a very common ALU pattern (flags + result computed differently).
+
+## Testbench strategy
+`testbench.v` sweeps all 8 opcodes against one fixed pair of operands
+(`in_a = 8'b01000010`, `in_b = 8'b10000110`) and checks both `alu_out` and `a_is_zero` after
+each, then re-checks `a_is_zero` specifically with `in_a = 0` to confirm the zero-flag logic.
 
 ## Files
 - `maincode.v` — ALU design (module `alu`).
